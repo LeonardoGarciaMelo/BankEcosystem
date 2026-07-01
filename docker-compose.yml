@@ -1,0 +1,100 @@
+services:
+
+  # ── Infrastructure ──────────────────────────────────────────────────────────
+
+  postgres:
+    image: postgres:15-alpine
+    container_name: bank-postgres
+    environment:
+      POSTGRES_USER: ${DB_USER}
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+      POSTGRES_DB: ${DB_NAME}
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER} -d ${DB_NAME}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  rabbitmq:
+    image: rabbitmq:3-management
+    container_name: bank-rabbitmq
+    environment:
+      RABBITMQ_DEFAULT_USER: ${RABBIT_USER}
+      RABBITMQ_DEFAULT_PASS: ${RABBIT_PASSWORD}
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ── APIs ────────────────────────────────────────────────────────────────────
+
+  bank-api:
+    build:
+      context: .
+      dockerfile: bank-api/Dockerfile
+    container_name: bank-api
+    ports:
+      - "${BANK_API_PORT:-8080}:8080"
+    environment:
+      BANK_API_PORT: 8080
+      RABBIT_HOST: rabbitmq
+      RABBIT_PORT: 5672
+      RABBIT_USER: ${RABBIT_USER}
+      RABBIT_PASSWORD: ${RABBIT_PASSWORD}
+      # Quarkus env var override: sets quarkus.datasource.jdbc.url directly.
+      # More reliable than relying on ${DB_HOST} interpolation inside application.properties.
+      QUARKUS_DATASOURCE_JDBC_URL: jdbc:postgresql://postgres:5432/${DB_NAME}
+      QUARKUS_DATASOURCE_USERNAME: ${DB_USER}
+      QUARKUS_DATASOURCE_PASSWORD: ${DB_PASSWORD}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+
+  payment-api:
+    build:
+      context: .
+      dockerfile: payment-api/Dockerfile
+    container_name: payment-api
+    ports:
+      - "${PAYMENT_API_PORT:-8082}:8082"
+    environment:
+      PAYMENT_API_PORT: 8082
+      # Hardcoded to Docker internal network — NOT from .env.
+      # .env has http://localhost:8080 which is only valid for local dev outside Docker.
+      BANK_API_URL: http://bank-api:8080
+    depends_on:
+      - bank-api
+
+  antifraud-api:
+    build:
+      context: .
+      dockerfile: antifraud-api/Dockerfile
+    container_name: antifraud-api
+    ports:
+      - "${ANTIFRAUD_API_PORT:-8081}:8081"
+    environment:
+      ANTIFRAUD_API_PORT: 8081
+      RABBIT_HOST: rabbitmq
+      RABBIT_PORT: 5672
+      RABBIT_USER: ${RABBIT_USER}
+      RABBIT_PASSWORD: ${RABBIT_PASSWORD}
+      # Same reason as payment-api — internal Docker URL, not from .env
+      BANK_API_URL: http://bank-api:8080
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+      bank-api:
+        condition: service_started
+
+volumes:
+  postgres_data:
