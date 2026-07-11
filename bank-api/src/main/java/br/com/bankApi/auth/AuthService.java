@@ -30,6 +30,8 @@ public class AuthService {
 
     private static final Logger log = Logger.getLogger(AuthService.class);
     private static final Duration TOKEN_LIFETIME = Duration.ofHours(1);
+    private static final short MAX_FAILED_ATTEMPTS = 5;
+    private static final Duration LOCKOUT_DURATION = Duration.ofMinutes(15);
 
     /**
      * Verifies username/password and, if valid, issues a signed JWT.
@@ -48,8 +50,20 @@ public class AuthService {
     public LoginResponseDTO login(LoginRequestDTO dto) {
         Credential credential = Credential.findByUsername(dto.username());
 
-        if (credential == null || !BcryptUtil.matches(dto.password(), credential.password)) {
-            log.warnf("Failed login attempt for username: %s", dto.username());
+        if (credential == null) {
+            log.warnf("Failed login attempt for unknown username: %s", dto.username());
+            throw new WebApplicationException("Invalid username or password", Response.Status.UNAUTHORIZED);
+        }
+
+        if (isLocked(credential)) {
+            log.warnf("Login attempt on locked account: %s", dto.username());
+            throw new WebApplicationException("Invalid username or password", Response.Status.UNAUTHORIZED);
+        }
+
+        if (!BcryptUtil.matches(dto.password(), credential.password)) {
+            registerFailedAttempt(credential);
+            log.warnf("Failed login attempt for username: %s (%d/%d)",
+                    dto.username(), credential.failedLoginAttempts, MAX_FAILED_ATTEMPTS);
             throw new WebApplicationException("Invalid username or password", Response.Status.UNAUTHORIZED);
         }
 
@@ -67,6 +81,7 @@ public class AuthService {
 
         credential.lastLoginAt = LocalDateTime.now();
         credential.failedLoginAttempts = 0;
+        credential.lockedUntil = null;
 
         String token = Jwt.issuer("bank-api")
                 .upn(credential.username)
@@ -79,5 +94,31 @@ public class AuthService {
         log.infof("Successful login: %s (role=%s)", credential.username, credential.role);
 
         return new LoginResponseDTO(token, "Bearer", TOKEN_LIFETIME.toSeconds());
+    }
+
+    /**
+     * True if the account is currently within its lockout window.
+     * A lock that has already expired is treated as "not locked" — the caller
+     * (a fresh failed attempt) will re-evaluate and potentially re-lock it.
+     */
+    private boolean isLocked(Credential credential) {
+        return credential.lockedUntil != null && credential.lockedUntil.isAfter(LocalDateTime.now());
+    }
+
+    /**
+     * Increments the failure counter. If it reaches the threshold, locks the
+     * account for {@link #LOCKOUT_DURATION} and resets the counter — so the
+     * next window starts clean once the lock expires.
+     */
+    private void registerFailedAttempt(Credential credential) {
+        short attempts = (short) (credential.failedLoginAttempts + 1);
+        credential.failedLoginAttempts = attempts;
+
+        if (attempts >= MAX_FAILED_ATTEMPTS) {
+            credential.lockedUntil = LocalDateTime.now().plus(LOCKOUT_DURATION);
+            credential.failedLoginAttempts = 0;
+            log.warnf("Account locked due to repeated failed logins: %s (locked until %s)",
+                    credential.username, credential.lockedUntil);
+        }
     }
 }

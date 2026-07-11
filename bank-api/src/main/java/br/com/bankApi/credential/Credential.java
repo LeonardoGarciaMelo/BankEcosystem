@@ -45,6 +45,9 @@ public class Credential extends PanacheEntityBase {
     @Column(name = "failed_login_attempts")
     public Short failedLoginAttempts = (short) 0;
 
+    @Column(name = "locked_until")
+    public LocalDateTime lockedUntil;
+
     @Column(name = "status", nullable = false)
     public Boolean status = true;
 
