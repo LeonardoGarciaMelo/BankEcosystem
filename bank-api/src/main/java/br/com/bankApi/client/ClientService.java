@@ -50,6 +50,7 @@ public class ClientService {
         Credential credential = new Credential();
         credential.username = dto.username();
         credential.password = BcryptUtil.bcryptHash(dto.password());
+        credential.role = "CLIENT";
         credential.persist();
 
         // Register the client

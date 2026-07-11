@@ -30,6 +30,9 @@ public class Credential extends PanacheEntityBase {
     @Column(nullable = false)
     public String password;
 
+    @Column(nullable = false, length = 20)
+    public String role = "CLIENT";
+
     @Column(name = "created_at", nullable = false, updatable = false)
     public LocalDateTime createdAt;
 

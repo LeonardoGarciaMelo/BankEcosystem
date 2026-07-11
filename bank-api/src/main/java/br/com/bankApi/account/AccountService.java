@@ -139,4 +139,25 @@ public class AccountService {
         account.blocked = true;
         log.errorf("Conta %d BLOQUEADA por suspeita de fraude.", accountNumber);
     }
+
+    /**
+     * Ownership check for RBAC: verifies whether the given account belongs to
+     * the client identified by {@code clientId}.
+     * <p>
+     * Used by {@code AccountResource} so a CLIENT-role user can only view their
+     * own statement — never another customer's, even if they know/guess the
+     * account number. ADMIN-role users bypass this check entirely.
+     *
+     * @param accountNumber the account being requested.
+     * @param clientId      the {@code clientId} claim extracted from the caller's JWT.
+     * @return true if the account belongs to that client.
+     */
+    @Transactional
+    public boolean isOwnedByClient(Long accountNumber, String clientId) {
+        Account account = Account.findByNumber(accountNumber);
+        if (account == null) {
+            throw new WebApplicationException("Account not found", Response.Status.NOT_FOUND);
+        }
+        return account.client.clientId.toString().equals(clientId);
+    }
 }

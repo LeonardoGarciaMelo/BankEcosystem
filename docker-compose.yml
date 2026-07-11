@@ -54,6 +54,11 @@ services:
       QUARKUS_DATASOURCE_JDBC_URL: jdbc:postgresql://postgres:5432/${DB_NAME}
       QUARKUS_DATASOURCE_USERNAME: ${DB_USER}
       QUARKUS_DATASOURCE_PASSWORD: ${DB_PASSWORD}
+      INTERNAL_API_KEY: ${INTERNAL_API_KEY}
+      JWT_PRIVATE_KEY_PATH: file:/.certs/privateKey.pem
+      JWT_PUBLIC_KEY_PATH: file:/.certs/publicKey.pem
+    volumes:
+      - ./bank-api/.certs:/.certs:ro
     depends_on:
       postgres:
         condition: service_healthy
@@ -90,6 +95,7 @@ services:
       RABBIT_PASSWORD: ${RABBIT_PASSWORD}
       # Same reason as payment-api — internal Docker URL, not from .env
       BANK_API_URL: http://bank-api:8080
+      INTERNAL_API_KEY: ${INTERNAL_API_KEY}
     depends_on:
       rabbitmq:
         condition: service_healthy
