@@ -52,7 +52,7 @@ Three independent services communicate over REST and asynchronous messaging (Rab
 
 ## Tech Stack
 
-- **Java 21** + **Quarkus 3.35.2**
+- **Java 21** + **Quarkus 3.37.2**
 - **PostgreSQL 15** — persistence (bank-api)
 - **RabbitMQ 3** — async messaging (bank-api → antifraud-api)
 - **Flyway** — database migrations
@@ -60,6 +60,29 @@ Three independent services communicate over REST and asynchronous messaging (Rab
 - **Hibernate Validator** — request validation (`@Valid`)
 - **MicroProfile REST Client** — inter-service HTTP calls
 - **Docker / Docker Compose** — container orchestration
+
+---
+
+## Security & Resilience
+
+This ecosystem incorporates industry-standard application security (AppSec) patterns, specifically targeted at a cybersecurity-focused portfolio:
+
+### 1. Authentication & Authorization
+- **JWT & Role-Based Access Control (RBAC)**: All user endpoints are secured via JWT authentication. Role scopes (e.g., `USER`, `ADMIN`) are enforced natively using MicroProfile JWT.
+- **Service-to-Service Security**: Sensitive internal actions (such as account blocking) are protected via a shared API key checked by [InternalAuthFilter.java](file:///home/leonardogm/Projetos/BankEcosystem/bank-api/src/main/java/br/com/bankApi/security/InternalAuthFilter.java).
+
+### 2. Rate Limiting & Lockout
+- **API Rate Limiting**: An in-memory sliding-window IP rate limiter is implemented at [RateLimitFilter.java](file:///home/leonardogm/Projetos/BankEcosystem/bank-api/src/main/java/br/com/bankApi/security/RateLimitFilter.java), applying granular limits depending on endpoint sensitivity.
+- **Brute-Force Protection**: Credentials include password hashing and automatic account lockout windows to prevent brute-force attacks.
+
+### 3. Supply Chain Security (Vulnerability Scanning)
+- **OWASP Dependency-Check**: Configured reactor-wide in the parent `pom.xml` to scan all libraries for known CVEs.
+- **Active Patching**: Core dependencies such as `jackson-databind` and `postgresql` are actively overridden to non-vulnerable versions (`2.22.1` and `42.7.13`).
+- **Suppression Management**: False positives (e.g., matching Java libraries to Go CVEs or name-based misidentifications) are formally documented and managed in [dependency-check-suppressions.xml](file:///home/leonardogm/Projetos/BankEcosystem/dependency-check-suppressions.xml).
+
+### 4. Hardened HTTP Security Headers & CORS
+- **Default Headers**: Response headers (`X-Content-Type-Options: nosniff`, `X-Frame-Options: DENY`, `Content-Security-Policy`, and `Strict-Transport-Security`) are enforced globally.
+- **Explicit CORS Decision**: CORS is explicitly disabled because this is a backend-to-backend REST API with no web frontend. Disabling CORS prevents browser-based cross-origin script abuse entirely.
 
 ---
 
@@ -118,7 +141,7 @@ Defaults are pre-configured in each `application.properties`, so this works with
 ```http
 POST http://localhost:8082/payments
 Content-Type: application/json
-
+ 
 {
   "amount": 1500.00,
   "method": "PIX",
@@ -168,11 +191,10 @@ BankEcosystem/
 
 This is an evolving portfolio project. Current gaps, in rough priority order:
 
-- **No authentication/authorization.** Every endpoint is currently open — including the internal `PATCH /accounts/{number}/block` endpoint, which should only ever be reachable from `antifraud-api`. JWT-based auth with role-based access control is the next milestone.
-- **No idempotency key on payments.** A duplicated request currently processes twice.
-- **No rate limiting.**
-- **Logs print full account numbers and amounts in plaintext** — should be masked for LGPD/PCI-DSS-style compliance.
-- **TED fee debit is a separate call from the main transfer** — not atomic; a partial failure between the two calls is possible.
+- **No idempotency key on payments**: A duplicated payment request currently processes twice. Real-world financial systems require idempotency keys to handle network retries safely.
+- **Log masking for accounts and amounts**: Only CPF is currently masked in logging. To achieve PCI-DSS or LGPD compliance, full account numbers and transaction amounts should also be masked.
+- **Non-atomic TED fee debit**: Processing fee debit is currently a separate call from the main transfer logic, creating a race condition where one can fail and the other succeeds.
+- **Distributed tracing**: For production monitoring, distributed tracing (e.g., OpenTelemetry) should be fully connected across the async RabbitMQ boundary.
 
 ---
 

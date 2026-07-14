@@ -1,0 +1,62 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<suppressions xmlns="https://jeremylong.github.io/DependencyCheck/dependency-suppression.1.3.xsd">
+    <suppress>
+        <notes><![CDATA[
+        False positive: CVE-2026-50559 targets the full Quarkus framework CPE,
+        which is incorrectly also assigned to internal sub-modules
+        (quarkus-arc, quarkus-core, resteasy-reactive, etc). Verified 2026-07-12.
+    ]]></notes>
+        <packageUrl regex="true">^pkg:maven/io\.quarkus.*$</packageUrl>
+        <vulnerabilityName>CVE-2026-50559</vulnerabilityName>
+    </suppress>
+
+    <!--
+        False positive: Packages containing "validator" are incorrectly matched
+        to the CPE cpe:2.3:a:validator:validator, which targets validator.nu / Nu Html Checker (CVE-2025-15104).
+    -->
+    <suppress>
+        <notes><![CDATA[
+        False positive: hibernate-validator, quarkus-hibernate-validator, and smallrye-config-validator
+        are incorrectly matched to validator:validator CPE. Verified 2026-07-14.
+        ]]></notes>
+        <packageUrl regex="true">^pkg:maven/(org\.hibernate\.validator|io\.quarkus|io\.smallrye\.config)/.*validator.*$</packageUrl>
+        <cpe>cpe:/a:validator:validator</cpe>
+    </suppress>
+
+    <!--
+        False positive: quarkus-hibernate-validator is analyzed using the Quarkus version (e.g. 3.37.2)
+        instead of the actual underlying hibernate-validator version (9.1.1.Final), triggering old
+        vulnerability checks like CVE-2023-1932. The actual checking is performed on the transitive dependency.
+    -->
+    <suppress>
+        <notes><![CDATA[
+        False positive: quarkus wrapper version mapped to hibernate-validator CPE. Verified 2026-07-14.
+        ]]></notes>
+        <packageUrl regex="true">^pkg:maven/io\.quarkus/quarkus-hibernate-validator@.*$</packageUrl>
+        <cpe>cpe:/a:hibernate:hibernate-validator</cpe>
+    </suppress>
+
+    <!--
+        False positive: OpenTelemetry-Go vulnerabilities (CVE-2026-29181, CVE-2026-39883,
+        CVE-2026-39882, CVE-2026-41178) are matched to Java libraries sharing the same group/artifact names.
+    -->
+    <suppress>
+        <notes><![CDATA[
+        False positive: Go SDK OpenTelemetry vulnerabilities mapped to Java semantic convention jars. Verified 2026-07-14.
+        ]]></notes>
+        <packageUrl regex="true">^pkg:maven/io\.opentelemetry\.semconv/opentelemetry-semconv.*$</packageUrl>
+        <cpe>cpe:/a:opentelemetry:opentelemetry</cpe>
+    </suppress>
+
+    <!--
+        False positive: angus-activation is incorrectly flagged with CVE-2025-7962 (SMTP injection),
+        which only affects angus-mail/jakarta-mail SMTP implementation.
+    -->
+    <suppress>
+        <notes><![CDATA[
+        False positive: angus-activation is matched to angus-mail/jakarta-mail SMTP vulnerability. Verified 2026-07-14.
+        ]]></notes>
+        <packageUrl regex="true">^pkg:maven/org\.eclipse\.angus/angus-activation.*$</packageUrl>
+        <vulnerabilityName>CVE-2025-7962</vulnerabilityName>
+    </suppress>
+</suppressions>
